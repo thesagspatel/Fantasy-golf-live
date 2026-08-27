@@ -7,7 +7,7 @@ const FANTASY_PLAYERS = [
   { owner: "Speedzoom", golfer: "Matt Fitzpatrick", fedex: 2 },
   { owner: "Jacob", golfer: "Wyndham Clark", fedex: 3 },
   { owner: "Hayden", golfer: "Cameron Young", fedex: 4 },
-  { owner: "Chris (Gay)", golfer: "Si Woo Kim", fedex: 5 },
+  { owner: "Chris (Bitch)", golfer: "Si Woo Kim", fedex: 5 },
   { owner: "Gage", golfer: "Chris Gotterup", fedex: 6 },
   { owner: "Jack", golfer: "Tommy Fleetwood", fedex: 9 },
   { owner: "Trey", golfer: "Ludvig Åberg", fedex: 10 },
