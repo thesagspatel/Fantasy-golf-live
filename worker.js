@@ -77,63 +77,34 @@ export default {
           1
         );
 
-        const rounds =
-          scoring.rounds ||
-          entry.rounds ||
-          [];
+        /*
+          LIVE TOURNAMENT TOTAL
 
-        let fantasyTotal =
+          The PGA TOUR cumulative total is used
+          throughout all four rounds, including
+          Sunday's final round.
+        */
+        const fantasyTotal =
           scoring.total ?? "E";
 
-        let fantasyTotalSort =
+        const fantasyTotalSort =
           scoring.totalSort ??
           scoreToNumber(scoring.total);
 
-        let locked = false;
-
         /*
-          SUNDAY / ROUND 4
-
-          Once PGA TOUR moves to Round 4, we DO NOT
-          use its live tournament total.
-
-          We reconstruct the fantasy score using
-          ONLY Rounds 1, 2 and 3.
+          A golfer is considered finished only
+          after completing Round 4.
         */
-        if (currentRound >= 4) {
-          const firstThree = rounds
-            .slice(0, 3)
-            .map(roundToPar);
+        const thruText =
+          String(scoring.thru || "").toUpperCase();
 
-          if (
-            firstThree.length === 3 &&
-            firstThree.every(x => x !== null)
-          ) {
-            fantasyTotalSort =
-              firstThree[0] +
-              firstThree[1] +
-              firstThree[2];
-
-            fantasyTotal =
-              formatScore(fantasyTotalSort);
-
-            locked = true;
-          }
-        }
-
-        /*
-          SATURDAY
-
-          Once a golfer finishes Round 3, his
-          individual 54-hole result is complete.
-        */
-        if (
-          currentRound === 3 &&
-          String(scoring.thru || "")
-            .toUpperCase() === "F"
-        ) {
-          locked = true;
-        }
+        const finished =
+          currentRound >= 4 &&
+          (
+            thruText === "F" ||
+            thruText === "18" ||
+            String(scoring.playerState || "").toUpperCase() === "COMPLETE"
+          );
 
         return {
           golfer:
@@ -144,14 +115,10 @@ export default {
           totalSort: fantasyTotalSort,
 
           today:
-            currentRound >= 4
-              ? "LOCKED"
-              : (scoring.score ?? "-"),
+            scoring.score ?? "-",
 
           thru:
-            currentRound >= 4
-              ? "54"
-              : (scoring.thru ?? "-"),
+            scoring.thru ?? "-",
 
           position:
             scoring.position ?? "-",
@@ -160,7 +127,7 @@ export default {
             scoring.playerState ?? "UNKNOWN",
 
           currentRound,
-          locked
+          locked: finished
         };
       });
 
@@ -193,11 +160,11 @@ export default {
       });
 
       /*
-        SORTING
+        DRAFT ORDER
 
-        1. Lowest cumulative golf score
+        1. Lowest cumulative 72-hole score
         2. FedExCup ranking entering tournament
-           if tied
+           breaks any tie
       */
       fantasy.sort((a, b) => {
         const scoreDifference =
@@ -284,87 +251,6 @@ async function decompressPayload(payload) {
 
 
 /* --------------------------------
-   ROUND 1–3 LOCKING
--------------------------------- */
-
-function roundToPar(round) {
-  if (
-    round === null ||
-    round === undefined
-  ) {
-    return null;
-  }
-
-  /*
-    PGA payloads can represent a round as either
-    a number/string or an object.
-  */
-  const raw =
-    typeof round === "object"
-      ? (
-          round.score ??
-          round.strokes ??
-          round.total ??
-          round.roundScore
-        )
-      : round;
-
-  if (
-    raw === null ||
-    raw === undefined ||
-    raw === ""
-  ) {
-    return null;
-  }
-
-  /*
-    If PGA already supplies relative-to-par
-    notation, use it directly.
-  */
-  const text =
-    String(raw).trim().toUpperCase();
-
-  if (text === "E") {
-    return 0;
-  }
-
-  if (
-    text.startsWith("+") ||
-    text.startsWith("-")
-  ) {
-    const relative = Number(text);
-
-    return Number.isFinite(relative)
-      ? relative
-      : null;
-  }
-
-  /*
-    East Lake is par 70.
-
-    Completed round stroke scores such as
-    67, 70, 72 are therefore converted to
-    -3, E, +2.
-  */
-  const strokes = Number(text);
-
-  if (!Number.isFinite(strokes)) {
-    return null;
-  }
-
-  if (strokes >= 50) {
-    return strokes - 70;
-  }
-
-  /*
-    Defensive fallback in case PGA supplies
-    relative-to-par as a plain number.
-  */
-  return strokes;
-}
-
-
-/* --------------------------------
    SCORE HELPERS
 -------------------------------- */
 
@@ -395,25 +281,6 @@ function scoreToNumber(score) {
   return Number.isFinite(number)
     ? number
     : 999;
-}
-
-
-function formatScore(score) {
-  const n = Number(score);
-
-  if (!Number.isFinite(n)) {
-    return "-";
-  }
-
-  if (n === 0) {
-    return "E";
-  }
-
-  if (n > 0) {
-    return `+${n}`;
-  }
-
-  return String(n);
 }
 
 
@@ -490,7 +357,7 @@ function buildPage(
   leaderboard
 ) {
 
-  const allLocked =
+  const allFinished =
     players.every(
       player => player.locked
     );
@@ -499,6 +366,16 @@ function buildPage(
     Number(
       leaderboard.currentRound || 1
     );
+
+  /*
+    Final standings are shown only after
+    all 10 selected golfers have completed
+    Sunday's final round.
+  */
+  const final72 =
+    currentRound >= 4 &&
+    allFinished;
+
 
   const rows =
     players.map(player => `
@@ -581,17 +458,6 @@ function buildPage(
             "2-digit"
         }
       );
-
-
-  /*
-    If PGA has moved to Round 4,
-    the fantasy leaderboard is
-    automatically considered final
-    because Sunday is excluded.
-  */
-  const final54 =
-    allLocked ||
-    currentRound >= 4;
 
 
   return `<!doctype html>
@@ -1023,8 +889,8 @@ h1 {
 •
 
 ${
-  final54
-    ? "54-hole standings"
+  final72
+    ? "Final 72-hole standings"
     : `Round ${currentRound}`
 }
 
@@ -1032,12 +898,12 @@ ${
 
 
 ${
-  final54
+  final72
     ? `
 
       <div class="final-banner">
         🔒 FINAL DRAFT ORDER —
-        54 HOLES
+        72 HOLES
       </div>
 
     `
@@ -1106,11 +972,12 @@ Only our 10 selected golfers count.
 
 <br><br>
 
-Thursday through Saturday,
-the page automatically updates
+The page automatically updates
 the projected fantasy draft order
-using each golfer's live cumulative
-TOUR Championship score.
+through all four rounds of the
+TOUR Championship using each
+golfer's live cumulative tournament
+score.
 
 <br><br>
 
@@ -1125,16 +992,17 @@ receives the earlier draft pick.
 
 <br><br>
 
-Once Round 3 is complete,
-the draft order is based on the
-first
 <strong>
-54 holes only.
+Sunday's final round counts.
 </strong>
 
-Sunday's Round 4 scores are
-excluded from the fantasy
-draft order.
+The leaderboard continues updating
+through Round 4. Once all 10 selected
+golfers have completed the final round,
+the 72-hole standings become the
+<strong>
+FINAL DRAFT ORDER.
+</strong>
 
 <br><br>
 
